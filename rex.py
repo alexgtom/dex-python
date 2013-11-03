@@ -25,6 +25,9 @@ class Rex(object):
     Creates a Rex object from a rex_file.
 
     A Rex object contains Trials. Trials contain Events.
+
+    Sample Usage:
+    >>> Rex("100113_SO1")
     """
     def __init__(self, rex_file, **kwargs):
         """ open file using trdd and passing the arguements into kwargs """
