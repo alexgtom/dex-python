@@ -1,0 +1,6 @@
+The "lib" directory contains the source files for the
+library of REX user functions.  They are archived in /usr/local/lib/librex.a
+The header files are in ../include
+
+		Lance M. Optican
+		25Feb93

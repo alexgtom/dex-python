@@ -1,0 +1,15 @@
+TRDD: Trial Rex Data Dumper V. 2.3 -- 20oct2005 -- LM Optican, JW McClurkin
+
+Usage:  trdd [options] rex_file > temp_file
+
+Options requiring values:
+    -s start_code;  the ecode used to delimit trials
+    -p pre_time;    analog window pre time
+    -o onlyCode;    only print trials containing "onlyCode" events
+    -m mininum;     minimum trial number
+    -M maximum;     maximum trial number
+		
+Options with no values:
+    -a use absolute times
+    -u no units
+    -v verbose (e.g., symbolic codes)

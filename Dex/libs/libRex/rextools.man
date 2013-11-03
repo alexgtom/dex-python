@@ -1,0 +1,596 @@
+.de DS
+.in +4
+.nf
+..
+.de DE
+.fi
+.in -4
+..
+.TH REXTOOLS 2 "May 20, 1997" "LSR/NEI"
+.SH NAME
+rextools \- functions for working with REX A- and E-files
+.SH SYNOPSIS
+.DS
+\fBREX File Functions:\fP
+	#include <rex.h>
+
+	void rexSplitEvents()
+	int rexFileOpen(char *file_name, int maxSampRate,
+		int startCode, int preTime)
+	void rexFileClose()
+
+	RexInfo *rexGetTrial(int trialNum, int interpFlag)
+	RexInfo *rexGetEvents(int trialNum)
+	RexInfo *rexGetAnalog(int interpFlag)
+	RexInfo *rexGetSignals(int recNum, int interpFlag)
+	int rexGetUnitCount(int unitCode)
+	void rexGetAnalogHeader(EVENT *ev, ANALOGHDR *ahdr)
+	void rexSetAWinCodes(int openCd, int closeCd, int cancelCd)
+
+	void rexInfoPrint(RexInfo *ri, FILE * strm)
+	char * rexTimeConv(long time)
+	void rexTimePrint(long time, FILE *strm)
+	void rexHeaderPrint(FILE *strm)
+	void rexTotalsPrint(FILE *strm)
+	void rexEprint(EVENT *ev, FILE *strm)
+	void rexAprint(EVENT *ev, FILE *strm, int color)
+	void rexSampHdrPrint(FILE *strm)
+
+\fBFIR Filter Functions:\fP
+	#include <ieeefir.h>
+
+	void get_fir(IeeeFir *filter)
+	void do_ieee_fir(FirData *raw, FirData *filt,
+		int nraw, IeeeFir *filter)
+
+	void rexSetFdiff(int N, int L)
+	void rexFdiff(FirData *din, FirData *dout,
+		int npts, int N, int L, int step)
+	void rexFddiff(FirData *din, FirData *dout,
+		int npts, int M, int step)
+	FirData rexPfdiff(FirData *din)
+	double rexFdiffBw(int N, int L, int T,
+		FILE *printstrm)
+
+	void rexMakeGauss(IeeeFir *gptr, float sigma, int step)
+	void rexUnitConvGauss(FirData *din, FirData *dout,
+		int nbuf, IeeeFir *filt)
+
+
+\fBSample Programs built with rex tools:\fP
+	brdd -- Basic Rex Data Dumper
+	grdd -- Graphic Rex Data Dumper
+	trdd -- Trial Rex Data Dumper
+	rexecc -- rex E-code changer
+	mark -- data marker
+.DE
+.sp 2
+.SH DESCRIPTION
+.LP
+The functions in the rextools library help users write C programs that
+access REX A- and E-files.  REX E-files consist of events, which
+are C-structures containing a code for a REX event, and the
+time at which that code occurred:
+.DS
+typedef struct {
+	u_short	e_seqnum;	/* event sequence number in E file */
+	short	e_code;		/* event code; see event.h */
+	long	e_key;		/* a long time; or if this event references
+				   an analog record in the A file, a long
+				   address */
+} EVENT;
+.DE
+REX events with an e_code < 0 correspond
+to analog records in the A-file.
+.LP
+REX A-files consist of headers and records containing REX data
+buffers.  Each channel of analog data collected by REX is stored,
+often in a packed format, in the data buffers.
+.LP
+The rextools provide a simple user interface
+for obtaining usable data from the A-files.
+All the analog and event data are divided up into trials.  A \fItrial\fP
+is an epoch determined by an event code.  This value is set when
+the REX files are opened.  It is usually the ENABLECD ( = 1001\d\s-310\s+3\u),
+but it will depend upon the SPOT paradigm that collected the data.
+.LP
+Occasionally, a mistake in the SPOT file can make it difficult to
+define an effective start code.  In those cases, a pre-time can
+be specified.  For example, one can use the analog window open code (800),
+and a pre-time (say 50 msec) to define trial start codes.
+.LP
+A trial consists of all the events and analog records between two start codes.
+The metaphor used for handling the analog data within each trial
+is the \fIsignal\fP.  Each REX data buffer is unpacked
+and sorted into separate analog signals.  A linked list is
+used to point to the signals.
+.LP
+Information about the structures
+is available in the header file "rex.h", which is in /usr/local/include.
+The REXTOOL functions themselves are in /usr/local/lib/librex.a.
+Thus, to compile and link a C program with the REXTOOLs,
+simply include the the header file "rex.h" in your
+program, and compile with "-lrex" flag in the command line.  E.g.:
+.ti +4
+.B "cc my_prog.c -lrex -lm"
+.sp
+.SH REX INFORMATION STRUCTURES
+.LP
+The REXTOOLs are oriented around a trial transaction model.
+The A- and E-file data are divided up into corresponding
+discrete events and analog records.  This collection of events and data
+is refered to as a trial.  The basic REXTOOLs transaction is to
+ask for a trial of a particular number.
+After a trial is loaded,
+information about that trial is available in the
+REX information structure:
+.sp
+.DS
+typedef struct rexinfo {
+	int nSignals;		/* number of signals */
+	SignalList *signalList;	/* pointer to list of signals */
+	int nPoints;		/* max number of points in signals */
+	int ad_res;		/* a/d resolution in bits */
+	long aStartTime;	/* time of first point in signal */
+	long aEndTime;		/* time of last point in signal */
+
+	EVENT *events;		/* pointer to event array for this trial */
+	int nEvents;		/* number in event array for this trial*/
+
+	RexUnits *rexunits;	/* rex unit structure if splitting events */
+	int nUnits;		/* number of different units between 601 and 699 */
+	int *unitCodes;		/* codes for each unit */
+
+	long tStartTime;	/* time of first point in trial */
+	long tEndTime;		/* time of last point in trial */
+
+	int numTrials;		/* number of trial periods */
+	int numRec;		/* number of analog records */
+	char *ehdr;		/* E-file header */
+	char *ahdr;		/* A-file header */
+	int maxSampRate;	/* maximum sample rate */
+	int startCode;		/* trial start code */
+} RexInfo;
+.DE
+NOTE:  after a trial has been loaded, the pointers to the events
+(EVENT *events and (if split buffers were requested) RexUnits *rexunits)
+are unique.  Thus, if the user program wants to save the data, it is only
+necessary to copy the pointers.  The same is not true of the analog records.
+If the user wants to save analog data, the data (not the pointers) must be saved.
+.LP
+Another rex information structure is the sub-structure for
+passing unit event code back to the user programs.  This is
+used by functions like rexGetTrialSorted(), rexGetEvents(), etc.,
+which parse the event file and separate control codes and unit codes.
+The unit structure is:
+.DS
+typedef struct unitinfo {
+	int *nTimes;		/* number of times for each unit */
+	int **unitTimes;	/* time of occurrence for each spike */
+}  RexUnits;
+.DE
+.sp
+.SH SIGNAL ACCESS FUNCTIONS
+.LP
+When a trial is requested, all the analog data are unpacked.
+Each analog record is placed in a separate array.
+These arrays are referenced by a linked list.  The head of the
+linked list is the member \fBsignalList\fP in the RexInfo structure.
+The number of signals successfully unpacked is in the member \fBnSignals\fP.
+.LP
+All rextools signals are stored in float buffers with filter
+guard bands (ieeefiroff in length) before and after the signal
+to make filtering algorithms faster.  All rexsignals are thus
+characterized by four variables, the buffer pointer and the
+buffer length, and the signal pointer and the signal length.
+\fBAll signal processing functions will take as input and
+give as output pointers to the start of real data in a buffer,
+and use the signal length as the number of points.\fP  Thus, instead
+of thinking of rextools as operating on buffers, simply think
+of them as operating on signals.  To create a signal, simply
+malloc() a buffer that is the length of the signal + ieeefirmax,
+and then return a pointer to &buffer[ieeefiroff].
+.LP
+The individual signals are referenced through the SignalList structure:
+.sp
+.DS
+typedef struct siglist {
+	RexSignal *signal;	/* pointer to start of Signal in buffer */
+	int npts;		/* number of points in signal */
+	int count;		/* number of this signal */
+	int index;		/* signal array index for this signal */
+	int sigChan;		/* rex channel number */
+	char *sigName;		/* name of signal channel */
+	char *sigLabel;		/* label for signal */
+	int adRate;		/* a/d store rate in Hz */
+	int storeRate;		/* sample store rate in Hz */
+	float fscale;		/* a/d fullscale */
+	float scale;		/* takes a/d levels to fullscale */
+	int sigGain;		/* rex gain table index */
+	struct siglist *next;	/* pointer to next element in list */
+} SignalList;
+.DE
+The data pointer is the member \fBsignal\fP, and the number of
+points in that signal is in member \fBnpts\fP.
+.sp
+The discrete events corresponding to the times spanned by the
+trial are in the event array pointed to by the RexInfo
+structure member \fBevents\fP.  The number of events in the array
+is indicated by the structure member \fBnEvents\fP.
+.LP
+The following functions are used to initialize the REX buffers,
+open and scan the datafiles, and retrieve individual trials.
+.TP
+.B "void rexSplitEvents()"
+In the default mode,
+the rextools store all the event codes together
+in one giant buffer.
+Calling "rexSplitEvents()" sets the mode of
+the rextools so that the event codes for each
+trial are stored in two buffers, one for control codes and one for
+unit codes (any code in the range 601-699).  The format for the
+separate storage of units is based on the "RexUnits" structure (see above).
+NOTE:  This function must be called before calling "rexFileOpen()".
+.TP
+.B "int rexFileOpen(char *file_name, int maxSampRate, int startCode, int PreTime)"
+The user must call this function to open the
+REX A- and E-files, and scan through the records.
+The argument, "file_name", must be a pointer to a
+character string giving a valid REX file name.  This
+can be just the root, as in "pw133", the root and an
+extension, as in "pw133A", and it may include a path,
+as in "../data/pw/pw133A".
+The argument "maxSampRate" is the 
+value of the maximum sample rate
+in Hertz, e.g., 500 if the peak sample rate
+in the data buffer was 500 samples/sec.  This argument
+is only necessary if you use an old REX file with
+analog records marked by -110 or -111 codes.  The new
+REX files contain their maximum sample rates.
+The argument "startCode" is the REX event code that
+marks the start of a trial (usually ENABLECD = 1001).
+Returns 0 on failure, or if successful,
+returns the number of trials in the E-file.
+The value of "preTime", in msec, is used to set the
+event window back relative to the startCode.  For example,
+if you use "800", the window open code, as the start code,
+any trial codes may be earlier.
+.TP
+.B "void rexFileClose()"
+The user may call this function to close the currently
+open
+REX A- and E-files, to free up file descriptors.
+However, it is not necessary to make this
+call before a second
+call to rexFileOpen(fname) with a new filename is made.
+.TP
+.B "RexInfo *rexGetTrial(int trialNum, int interpFlag)"
+This function is called to pick up the trial with number
+trialnum.
+If interpFlag is 0, no interpolation of data sampled at less than
+maxSampRate will be done.  If it is non-zero, data
+collected at lower rates will be interpolated up
+to the peak rate (see rexGetSignals() below for details).
+This function is the main user interface for collecting data.
+For example, to see all the trials, you could use a loop like:
+.DS
+#include "rex.h"
+...
+	RexInfo *ri;
+	int numTrials;
+...
+	numTrials = rexFileOpen("my_data", 500, ENABLECD);
+	for (i = 1; i <= numTrials; i++) {
+		ri = rexGetTrial(i, 1);
+...
+	}
+.DE
+.sp
+This function returns a pointer to a structure containing
+information about the current REX data record.  The record
+contains a pointer to a linked list
+of signal structures of type SignalStructure (defined
+in rex.h).  This structure is the users main means of
+accessing the information in a REX data record.  Suppose
+your program sets up the RexInfo structure as follows:
+.sp
+.DS
+RexInfo *ri;
+
+ri = rexGetTrial(k, 1);
+.DE
+.sp
+Then, you can loop through all the signals with
+pointers using:
+.sp
+.DS
+SignalList *s;
+RexSignal *dataPointer;
+int numberDataPoints;
+...
+for (s = ri->signalList; s; s = s->next) {
+	dataPointer = s->signal;
+	numberDataPoints = s->npts;
+}
+.DE
+.TP
+.B "RexInfo *rexGetEvents(int trialNum)"
+This function returns the events from trial "trialNum",
+possibly split into control codes and unit times (see rexSplitEvents()).
+It is designed to make parsing of the event codes more rapid,
+since the analog records for each trial are not retrieved.
+It is designed to be used with "rexGetAnalog()"
+(see below).
+.sp
+If split events are used, the units can be recovered from the RexUnits structure.
+For example, this subroutine plots each spike in the given trial with times between lowt and hit:
+.sp
+.DS
+void plotUnits(RexInfo *ri, long lowt, long hit) {
+	RexUnits *ru;
+	long *t, time;
+	int i, j, n;
+
+	ru = ri->rexunits;
+	for (i = 0; i < ri->nUnits; i++) {
+		if (ru->nTimes[i] == 0) continue;
+
+		code = ri->unitCodes[i];
+		t = ru->unitTimes[i];
+		n = ru->nTimes[i];
+
+		for (j = 0; j < n; j++) {
+			time = *t++;
+			if (time < lowt || hit < time) continue;
+			plotUnit(time, code - UNIT1CD);
+		}
+	}
+}
+.DE
+.TP
+.B "rexGetAnalog(int interpFlag)"
+This function is paired with "rexGetEvents()".  Once a trial has passed
+acceptance criteria based on the REX event codes, the corresponding
+analog record can be retrieved.  Note that the trial number associated
+with "rexGetAnalog()" is the one from the previous call to "rexGetEvents()",
+and cannot be set independently.  For example:
+.sp
+.DS
+#include "rex.h"
+...
+	RexInfo *ri;
+	int numTrials;
+...
+	rexSplitEvents();
+	numTrials = rexFileOpen("my_data", 500, ENABLECD);
+	for (i = 1; i <= numTrials; i++) {
+		ri = rexGetEvents(i);
+		if (accept(ri->events, ri->nEvents) {
+			ri = rexGetAnalog(0);
+			saveBufPointers(i, ri);
+		}
+...
+	}
+.DE
+.TP
+.B "RexInfo *rexGetSignals(int recNum, int interpFlag)"
+(NOTE:  Most users will not need this function, as it is called
+internally by rexGetTrial().  It is included for completeness.)
+This function is called to pick up the signal
+with number recNum.
+If interpFlag
+is 0, no interpolation of data sampled at less than
+maxSampRate will be done.  If it is non-zero, data
+collected at lower rates will be interpolated up
+to the peak rate.  Important:  the ratio
+of the lower sample rate to the peak rate
+rates must be a power of two (2, 4, 8, etc.)!
+E.g., 1000/500 = 2, 1000/250 = 4, 500/125 = 4, etc.
+are allowed.
+However, 1000/750 = 1.33, 500/100 = 5, are not allowed.
+.TP
+.B "int rexGetUnitCount(int unitCode)"
+This function returns the total count in the E-file for
+the unit numbered "unitCode", which runs from UNIT1CD (601)
+to (UNIT1CD + rexMaxUnits - 1).
+.TP
+.B "void rexGetAnalogHeader(EVENT *ev, ANALOGHDR *ahdr)"
+This function reads the analog header pointed to by the event
+pointed to by ev.  It returns 0 on success, 1 on error.
+.TP
+.B "void rexSetAWinCodes(int openCd, int closeCd, int cancelCd)"
+This function allows the user to set any e-code as the signal
+that the analog data keeping window in REX was opened, closed,
+or cancelled.  The defaults are the standard REX window codes,
+WOPENCD (800), WCLOSECD (801), and WCANCELCD (802).
+.bp
+.SH PRINTING FUNCTIONS
+.sp 2
+.TP
+.B "char * rexTimeConv(long time)"
+This converts a REX time (in msecs) to
+a printable character string giving:
+days : hours : min : sec.msec
+.TP
+.B "void rexTimePrint(long time, FILE *strm)"
+prints time on "strm"
+.TP
+.B "void rexHeaderPrint(FILE *strm)"
+prints REX A- and E-file headers on strm.
+.TP
+.B "void rexTotalsPrint(FILE *strm)"
+prints A-file code totals on strm.
+.TP
+.B "void rexEprint(EVENT *ev, FILE *strm)"
+prints event pointed to by "ev".
+.TP
+.B "void rexAprint(EVENT *ev, FILE *strm, int color)"
+prints analog record pointed to by "ev".
+if "color" is non-zero, it prints in color.
+.TP
+.B "void rexSampHdrPrint(FILE *strm)"
+prints the rex -112 buffer sampling header.
+.bp
+.SH IEEE FIR FILTER FUNCTIONS
+.LP
+These functions are provided to apply finite-impulse-response
+filters to REX data after they have been put in the signal buffers.
+.TP
+.B "void get_fir(IeeeFir *filter)"
+This function reads in an IEEE-format filter (such as provided by
+the output of the "fir" program).  The file name of the filter
+is in the structure member filter->dname.  The subroutine allocates
+a unique space to hold the filter, loads it into memory, and applies
+any necessary scaling.
+.TP
+.B "void do_ieee_fir(FirData * raw, FirData * filt, int nraw, IeeeFir *filter)"
+This function applies the filter.  To use, suppose you have "nraw" data points.
+Make two data arrays, "raw" and "filt" that are (nraw + ieeeFirMax) points
+long and of type FirData.  Then, load the raw data points into "raw"
+starting at ieeeFirOff.  Call the function.  The filtered data are in
+the "filt" array, starting at ieeeFirOff.  (The reason for the offset
+is to allow the use of Shure's algorithm to minimize filter transients
+at the beginning and end of the data.)
+.TP
+.B "Fast Differentiators"
+The rextools now include a set of functions for performing
+fast differentiation on signals, using the near-optimal
+method of 
+S. Usui and I. Amidror (IEEE T-BME 29, pg 686-693, 1982).
+These filters are central difference averages, characterized as:
+.DS
+.B \dN\uf\u2L+1
+.DE
+where \fIN\fP is the half-width of the central difference, and
+\fIL\fP is the number of central differences in the average.
+.TP
+.B "void rexSetFdiff(int N, int L)"
+Used to set up internal variables for the fast differentiators.
+.TP
+.B "void rexFdiff(FirData *din, FirData *dout, int npts, int N, int L, int step)"
+The buffer version of the fast differentiator.
+It computes the normalized derivatives, where the arguments are:
+.DS
+din	= input data signal pointer
+dout	= output data signal pointer
+npts	= number of points in signal (excluding filter tails)
+N,L	= filter specification
+step	= sample interval in msec
+.DE
+.TP
+.B "void rexFddiff(FirData *din, FirData *dout, int npts, int M, int step)"
+Performs a double differentiation on data.  The arguments are:
+.DS
+din	= input data signal pointer
+dout	= output data signal pointer
+npts	= number of points in signal (excluding filter tails)
+M	= filter specification
+step	= sample interval in msec
+.DE
+The choices for M are 0, 1, and 2, for the filters
+1/2F^5+1/2F^5, 3f + 1f, and 2f^3 + 1f, respectively.
+.TP
+.B "FirData rexPfdiff(FirData *point)"
+Evaluates the fast differentiator at a single point, \fI*point\fP.
+Must be preceded by a call to rexSetFdiff() to set the
+values of N and L (see above).
+.TP
+.B "double rexFdiffBw(int N, int L, int T, FILE *printstrm)"
+This function returns the bandwidth (-3 dB, or half-power, point)
+of a fast differentiator.  The arguments are:
+.DS
+N = half-width of central difference
+L = # of central differences in avg
+T = sample interval in milliseconds
+printstrm, if not NULL, causes output of bw message
+.DE
+.TP
+.B "void rexMakeGauss(IeeeFir *gptr, float sigma, int step)"
+Makes an IEEE format filter consisting of a gaussian pulse
+with width \fIsigma\fP and sample interval \fIstep\fP.
+.TP
+.B "void rexUnitConvGauss(FirData *din, FirData *dout, int nbuf, IeeeFir *filt)"
+A special function for convolving a gaussian pulse with
+a buffer containing units encoded as 1 if the unit is present,
+0 otherwise.
+.bp
+.SH SAMPLE PROGRAMS
+Several sample programs have been written with REX tools.  Looking
+at these programs is one of the best ways to understand the proper
+use of the functions described above.  Note that in all these
+programs, the rex E- and A-files are divided up according to the
+concept of a trial (see above).
+.TP
+.B "BRDD"
+The \fIBasic Rex Data Dumper\fP can be used to convert REX A- and E-files
+into an ascii format.
+The output file has the last letter \fIB\fP.
+The first line of the output gives the file
+name, the sample rate, and the start code used to create the B-file.
+Every subsequent line has the format:
+.DS
+time  code  signal[0]  signal[1]  ...
+.DE
+.TP
+.B "GRDD"
+The \fIGraphic Rex Data Dumper\fP is an X11-windows based program.
+It opens REX E-files (and A-files, if present), and graphically
+represents all the events on a trial-by-trial basis.
+.TP
+.B "TRDD"
+The \fITrial Rex Data Dumper\fP prints out all the events in
+a REX E-file.  The events are grouped by trial, and
+presented in a compact form.  TRDD's output is more easily viewed
+than SRDD's, but it has less information  for debugging.
+A trial output consists of all the events between
+two start codes.  On each line,
+the first number is the event code, the second
+number is the elapsed time since the trial began, and the third number
+is the actual time of the event.  If several unit codes occur contiguously,
+the report is compressed by stringing out the occurrence times.
+If the event is an analog record (a negative code), the last
+item on the line will be the continue flag from the REX analog header
+for that record.
+.LP
+A sample of the output looks like:
+.DS
+Code   Elapsed	Time
+
+Trial 1:  40 events
+ 1001	655	6741474
+ 6012	755	6741574
+  601	1071	6741890
+ 1010	1109	6741928
+  601	1121	6741940 6741973 6741992 6742017 6742030 6742036 6742038 6742040
+		6742042 6742047 6742051 6742054 6742055 6742060 6742065 6742072
+		6742079 6742088 6742096
+    1	1230	6742049
+  601	1282	6742101 6742113 6742130 6742138 6742155 6742170
+ 6212	1960	6742779
+  800	2500	6743319
+  801	2540	6743359
+ -110	0	6740819 0
+    2	2770	6743589
+ -111	0	6740819 0
+ -110	2295	6743114 1
+ -111	2295	6743114 1
+ 1027	3146	6743965
+  601	5531	6746350
+.in -4
+.DE
+Note:
+in this example, the analog record (-110 code) trial begins the trial,
+probably because the window open PRE time was very large.
+.TP
+.B "REXECC"
+This program allows the user to change a REX E-code from
+one value to another.
+.TP
+.B "MARK"
+This is a program for automatically marking and interactively
+viewing REX analog data records.
+.sp 2
+.SH AUTHOR
+.RE
+.LP
+Lance M. Optican (lmo@lsr.nei.nih.gov)
