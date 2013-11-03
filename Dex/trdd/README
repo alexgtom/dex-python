@@ -1,0 +1,6 @@
+Run make and it should produce a binary called trdd.
+
+Sample usage:
+	./trdd -s 1001 -p 0 -M 1000 100113_SO1	
+    
+Where 100113_SO1A and 100113_SO1E are in the same directory as trdd

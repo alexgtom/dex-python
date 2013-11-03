@@ -1,7 +1,7 @@
 LIBREX_A_PATH = ../libs/libRex/Linux64
 LIBREX_PATH = ../libs/libRex
 
-default: run
+default: compile
 
 run: clean compile
 	./trdd -s 1001 -p 0 -M 1000 100113_SO1	
