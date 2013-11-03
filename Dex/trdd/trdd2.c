@@ -28,13 +28,14 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef sgi
 #include <sys/types.h>
 #include <unistd.h>
 #endif
 
-#include "rex.h"
+#include <rex.h>
 #include "trdd.h"
 
 static int lastUnit = 0, repeats = 0, nlOut = 1;
@@ -105,7 +106,7 @@ char * codeName(int code)
 void printUnits(RexInfo *ri)
 {
 	int i, j, n, nrep, code, rTime, time, elapsedTime;
-	long *t;
+	int32_t *t;
 	char buf[26];
 	RexUnits *ru = ri->rexunits;
 

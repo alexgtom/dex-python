@@ -51,7 +51,7 @@
 #include <unistd.h>
 #endif
 
-#include "rex.h"
+#include <rex.h>
 #include "trdd.h"
 
 int startCode = ENABLECD;

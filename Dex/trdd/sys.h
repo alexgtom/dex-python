@@ -164,7 +164,8 @@ void dputs(char far *p);
 #else
 void dputs(char *p);
 #endif
-void dprintf(char *fmt, ...);
+// remove dprintf conflict
+//void dprintf(char *fmt, ...);
 void doutput(int sig);
 
 #if NEED_FAR

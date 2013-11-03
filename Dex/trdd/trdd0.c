@@ -45,7 +45,7 @@
 #include <unistd.h>
 #endif
 
-#include "rex.h"
+#include <rex.h>
 #include "trdd.h"
 
 char version[] = "TRDD: Trial Rex Data Dumper V. 2.2 -- 11apr96 -- LM Optican";
